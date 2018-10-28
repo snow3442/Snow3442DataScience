@@ -1,12 +1,16 @@
 ### To install all packages used in the project, 
 ### enable the following lines of code
-install.packages("tree")
-install.packages("gbm")
-install.packages("randomForest")
-install.packages("ggplot2")
-install.packages("MASS")
-install.packages("boot")
-install.packages("e1071", repos="http://R-Forge.R-project.org")
+#install.packages("tree")
+#install.packages("gbm")
+#install.packages("randomForest")
+#install.packages("ggplot2")
+#install.packages("MASS")
+#install.packages("boot")
+#
+#install.packages("adabag")
+#install.packages("ada")
+#install.packages("rpart")
+#install.packages("plyr")
 ###loading datafiles
 titanic_train<-read.csv(file.choose(),head=T)
 titanic_test<-read.csv(file.choose(),head=T)
@@ -16,6 +20,7 @@ library(randomForest)
 library(ggplot2)
 library(MASS)
 library(boot)
+library(plyr)
 ###view data###
 dim(titanic_train)
 dim(titanic_test)
@@ -28,7 +33,7 @@ titanic_train$PassengerId<-NULL
 titanic_train$Name<-NULL
 titanic_train$Embarked<-NULL
 titanic_train$Cabin<-NULL
-sum(is.na(titanic_train))
+sum(is.na(titanic_train$Age))
 titanic_train<-na.omit(titanic_train)
 titanic_train<-within(titanic_train,{
   Survived<-as.factor(Survived)
@@ -42,13 +47,15 @@ dim(titanic_train)
 survivalRate = mean(Survived==1)
 survivalRate
 #age distribution
-histogram(Age)
-#gender distribution
-histogram(Sex)
+hist(Age)
 #Survived by socio class
+
 survBySocioClassPlot<-ggplot(titanic_train,
        aes(x= Pclass, fill= Survived)) + geom_bar()
 print(survBySocioClassPlot+ggtitle("Survival Status By Socio Class"))
+#survived by sex
+survBySexPlot<-ggplot(titanic_train, aes(x=Sex, fill=Survived))+geom_bar()
+print(survBySexPlot+ggtitle("Survival Status By Gender"))
 #survived by age
 ggplot(titanic_train, aes(x= Survived, y= Age)) + geom_boxplot()
 #####stacked barchart of survived by socio class and by sex
@@ -63,6 +70,7 @@ ggplot(titanic_train, aes(x= Pclass, y=Age, colour= Survived)) + geom_boxplot()
 #ggplot(titanic_train, aes(x= Survived, y= Age, colour= Pclass)) + geom_boxplot() + facet_wrap(~ Sex, nrow= 1) 
 
 #### logistic on the entire dataset ####
+lean_data=titanic_train
 glm.fit<-glm(data=lean_data,Survived~.,family="binomial")
 pred.probs<-predict(glm.fit, newdata = lean_data, type="response")
 pred.0.1<-rep(0,714)
@@ -86,6 +94,14 @@ for (k in 1:7) {
 cv_list
 mean(cv_list)
 #### Linear Discriminant Analysis
+set.seed(10)
+lean_train<-sample(1: nrow(lean_data), 500)
+lean_data.train<-lean_data[lean_train,]
+lean_data.test<-lean_data[-lean_train,]
+lda.fit=lda(Survived~.,data=titanic_train,subset=lean_train)
+lda.pred<-predict(lda.fit,lean_data.test)
+lda.class<-lda.pred$class
+mean(lda.class==lean_data.test$Survived)
 #Linear Discriminant Analysis
 set.seed(2)
 n_folds=7
@@ -103,6 +119,7 @@ for (k in 1:7) {
 }
 cv_list
 mean(cv_list)
+
 library(adabag)
 library(ada)
 library(rpart)
@@ -153,14 +170,16 @@ for (k in 1:7) {
   train_i<-which(folds_i!=k)
   train_rf<-lean_data[-test_i,]
   test_rf<-lean_data[test_i,]
-  rf.fit=randomForest(Survived~., data=titanic_train,subset=train_i, mtry=2, importance=TRUE)
+  rf.fit=randomForest(Survived~., data=titanic_train,subset=train_i, mtry=3,ntree=50,importance=TRUE)
   rf.yhat = predict(rf.fit, newdata=test_rf)
   cv_list[k]=mean(rf.yhat==test_rf$Survived)
 }
 cv_list
 mean(cv_list)
 
+
 #### train and test using svm ####
+
 #### To install package 'e1071', use the following R command
 library(e1071)
 set.seed(7)
@@ -176,3 +195,4 @@ svmYPreds = predict(bestmod, lean_data.test)
 table(predict=svmYPreds,truth=lean_data.test$Survived)
 svmResult = (104+69)/214
 svmResult
+
